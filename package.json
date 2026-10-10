@@ -1,0 +1,14 @@
+{
+  "name": "OneCode",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "QR file transfer service for Cloudflare Pages",
+  "scripts": {
+    "start": "node serve.mjs",
+    "dev": "node serve.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
