@@ -1,4 +1,4 @@
-const CACHE_NAME = "onecode-shell-v1";
+const CACHE_NAME = "onecode-shell-v2";
 const SHELL = [
   "/",
   "/index.html",
