@@ -1,9 +1,9 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-// Keep each QR readable while showing every data frame twice for camera capture.
-const CHUNK_SIZE = 900;
+// Keep payloads comfortably below the camera decoder limit, then repeat frames.
+const CHUNK_SIZE = 600;
 const FRAME_INTERVAL = 220;
 const DATA_REPEATS = 2;
-const META_REPEATS = 3;
+const META_REPEATS = 4;
 
 const fileInput = document.getElementById("file-input");
 const dropZone = document.getElementById("drop-zone");
@@ -169,11 +169,16 @@ fileInput.addEventListener("change", () => {
 dropZone.addEventListener("drop", (event) => addFiles([...event.dataTransfer.files]));
 
 function renderFrame(index) {
-  const qr = qrcode(0, "M");
-  qr.addData(frames[index].payload, "Byte");
-  qr.make();
-  qrElement.innerHTML = qr.createImgTag(6, 0);
-  qrStatus.textContent = `QR ${index + 1} / ${frames.length}`;
+  try {
+    const qr = qrcode(0, "M");
+    qr.addData(frames[index].payload, "Byte");
+    qr.make();
+    qrElement.innerHTML = qr.createImgTag(6, 0);
+    qrStatus.textContent = `QR ${index + 1} / ${frames.length}`;
+  } catch (error) {
+    showBanner(`QRの生成に失敗しました: ${error.message}`);
+    stopTransfer();
+  }
 }
 
 function scheduleNextFrame() {

@@ -1,5 +1,5 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const MAX_CHUNK_SIZE = 1000;
+const MAX_CHUNK_SIZE = 600;
 const scanButton = document.getElementById("scan-btn");
 const againButton = document.getElementById("again-btn");
 const video = document.getElementById("camera-frame");
@@ -26,6 +26,7 @@ let name = "received-file";
 let receivedUrls = [];
 let receivedBytes = 0;
 let receiveStartedAt = 0;
+let lastScanAt = 0;
 
 const showBanner = (message, type = "error") => {
   banner.textContent = message;
@@ -186,9 +187,12 @@ function processCode(code) {
 
 function scanLoop() {
   if (!stream) return;
-  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+  const now = performance.now();
+  if (now - lastScanAt >= 80 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    lastScanAt = now;
+    const scale = Math.min(1, 1024 / video.videoWidth);
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     const context = canvas.getContext("2d", { willReadFrequently: true });
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const image = context.getImageData(0, 0, canvas.width, canvas.height);

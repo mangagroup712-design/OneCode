@@ -1,4 +1,4 @@
-const VERSION = "v3"; // 大きく変えたらここを上げる
+const VERSION = "v4"; // 大きく変えたらここを上げる
 const CACHE = `onecode-${VERSION}`;
 const SHELL = [
   "/", "/client.html", "/read.html", "/404.html",
