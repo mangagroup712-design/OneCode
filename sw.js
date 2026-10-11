@@ -1,10 +1,14 @@
-const VERSION = "v4"; // 大きく変えたらここを上げる
+const VERSION = "v5"; // 大きく変えたらここを上げる
 const CACHE = `onecode-${VERSION}`;
 const SHELL = [
   "/", "/client.html", "/read.html", "/404.html",
   "/css/main.css", "/js/client.js", "/js/read.js", "/js/pwa.js",
   "/manifest.json", "/favicon.ico",
-  // CDNのQR/jsQRライブラリを自前ホストしたら、ここに追加
+  "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js",
+  "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+];
+const RUNTIME_ORIGINS = [
+  "https://cdn.jsdelivr.net",
 ];
 
 // リダイレクト済みレスポンスは、ナビゲーションで返すと拒否されるので作り直す
@@ -67,7 +71,8 @@ async function staleWhileRevalidate(request) {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || req.headers.has("range")) return;
-  if (new URL(req.url).origin !== self.location.origin) return;
+  const requestUrl = new URL(req.url);
+  if (requestUrl.origin !== self.location.origin && !RUNTIME_ORIGINS.includes(requestUrl.origin)) return;
 
   event.respondWith(
     req.mode === "navigate" ? networkFirst(req) : staleWhileRevalidate(req),

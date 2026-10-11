@@ -11,6 +11,7 @@ const progressLabel = document.getElementById("progress-label");
 const speedLabel = document.getElementById("speed-label");
 const result = document.getElementById("result");
 const previewContent = document.getElementById("preview-content");
+const zipDownloadButton = document.getElementById("zip-download-btn");
 const banner = document.getElementById("banner");
 let stream = null;
 let animationFrame = null;
@@ -27,6 +28,7 @@ let receivedUrls = [];
 let receivedBytes = 0;
 let receiveStartedAt = 0;
 let lastScanAt = 0;
+const receivedFiles = [];
 
 const showBanner = (message, type = "error") => {
   banner.textContent = message;
@@ -67,6 +69,8 @@ function resetTransfer() {
   previewContent.replaceChildren();
   receivedUrls.forEach((url) => URL.revokeObjectURL(url));
   receivedUrls = [];
+  receivedFiles.length = 0;
+  zipDownloadButton.classList.add("hidden");
   result.classList.add("hidden");
   banner.classList.add("hidden");
 }
@@ -80,18 +84,53 @@ function stopCamera() {
   scanButton.classList.remove("hidden");
 }
 
+function splitFileName(fileName) {
+  const dot = fileName.lastIndexOf(".");
+  return dot > 0
+    ? { base: fileName.slice(0, dot), extension: fileName.slice(dot + 1).toLowerCase() }
+    : { base: fileName, extension: "" };
+}
+
+function safeFileName(value, fallback) {
+  const cleaned = value.trim().replace(/[\\/:*?"<>|]/g, "_");
+  return cleaned || fallback;
+}
+
 function appendPreview(blob) {
   const url = URL.createObjectURL(blob);
   receivedUrls.push(url);
+  const file = { blob, name, mime, size: fileSize, url };
+  receivedFiles.push(file);
   const item = document.createElement("article");
   item.className = "received-item";
-  const title = document.createElement("strong");
-  title.textContent = `${name}（${Math.round(fileSize / 1024)} KB）`;
-  item.append(title);
+  const nameEditor = document.createElement("label");
+  nameEditor.className = "file-name-editor";
+  const parts = splitFileName(name);
+  let downloadLink = null;
+  const input = document.createElement("input");
+  input.className = "file-item-name";
+  input.type = "text";
+  input.value = parts.base;
+  input.setAttribute("aria-label", `${name}の拡張子を除いた保存名`);
+  const extension = document.createElement("span");
+  extension.className = "file-name-extension";
+  extension.textContent = parts.extension ? `.${parts.extension}` : "";
+  const updateName = () => {
+    file.name = `${safeFileName(input.value, parts.base)}${parts.extension ? `.${parts.extension}` : ""}`;
+    input.value = splitFileName(file.name).base;
+    if (downloadLink) downloadLink.download = file.name;
+  };
+  input.addEventListener("change", updateName);
+  input.addEventListener("blur", updateName);
+  nameEditor.append(input, extension);
+  const meta = document.createElement("p");
+  meta.className = "file-item-meta";
+  meta.textContent = `${Math.round(fileSize / 1024)} KB`;
+  item.append(nameEditor, meta);
   if (mime.startsWith("image/")) {
     const image = document.createElement("img");
     image.src = url;
-    image.alt = name;
+    image.alt = file.name;
     item.append(image);
   } else if (mime.startsWith("video/")) {
     const player = document.createElement("video");
@@ -107,7 +146,7 @@ function appendPreview(blob) {
   } else if (mime === "application/pdf") {
     const frame = document.createElement("iframe");
     frame.src = url;
-    frame.title = name;
+    frame.title = file.name;
     frame.height = 320;
     item.append(frame);
   } else {
@@ -115,14 +154,50 @@ function appendPreview(blob) {
     note.textContent = "プレビュー非対応の形式です。ダウンロードして確認してください。";
     item.append(note);
   }
-  const link = document.createElement("a");
-  link.className = "secondary-link";
-  link.href = url;
-  link.download = name;
-  link.textContent = "ファイルをダウンロード";
-  item.append(link);
+  downloadLink = document.createElement("a");
+  downloadLink.className = "secondary-link";
+  downloadLink.href = url;
+  downloadLink.download = file.name;
+  downloadLink.textContent = "ファイルをダウンロード";
+  item.append(downloadLink);
   previewContent.append(item);
   result.classList.remove("hidden");
+  zipDownloadButton.classList.toggle("hidden", receivedFiles.length < 1);
+}
+
+async function downloadZip() {
+  if (!window.JSZip || !receivedFiles.length) {
+    showBanner("ZIP機能の読み込みが完了していません。オンラインで一度開いてから再試行してください。");
+    return;
+  }
+  zipDownloadButton.disabled = true;
+  try {
+    const zip = new JSZip();
+    const usedNames = new Set();
+    receivedFiles.forEach((file) => {
+      const original = file.name;
+      const parts = splitFileName(original);
+      let candidate = original;
+      let number = 2;
+      while (usedNames.has(candidate)) {
+        candidate = `${parts.base} (${number})${parts.extension ? `.${parts.extension}` : ""}`;
+        number += 1;
+      }
+      usedNames.add(candidate);
+      zip.file(candidate, file.blob);
+    });
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "onecode-received-files.zip";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    showBanner(`ZIPの作成に失敗しました: ${error.message}`);
+  } finally {
+    zipDownloadButton.disabled = false;
+  }
 }
 
 function completeFile() {
@@ -221,5 +296,6 @@ async function startCamera() {
 
 scanButton.addEventListener("click", startCamera);
 againButton.addEventListener("click", startCamera);
+zipDownloadButton.addEventListener("click", downloadZip);
 window.addEventListener("pagehide", stopCamera);
 resetTransfer();
