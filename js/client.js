@@ -1,7 +1,7 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 // Keep each QR readable while showing every data frame twice for camera capture.
 const CHUNK_SIZE = 900;
-const FRAME_INTERVAL = 334;
+const FRAME_INTERVAL = 220;
 const DATA_REPEATS = 2;
 const META_REPEATS = 3;
 
