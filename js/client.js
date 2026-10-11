@@ -1,6 +1,7 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const CHUNK_SIZE = 720;
-const FRAME_INTERVAL = 260;
+// Larger QR payloads and a shorter display interval reduce the number of frames.
+const CHUNK_SIZE = 1000;
+const FRAME_INTERVAL = 180;
 
 const fileInput = document.getElementById("file-input");
 const dropZone = document.getElementById("drop-zone");

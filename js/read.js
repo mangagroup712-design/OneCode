@@ -1,5 +1,5 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const MAX_CHUNK_SIZE = 720;
+const MAX_CHUNK_SIZE = 1000;
 const scanButton = document.getElementById("scan-btn");
 const againButton = document.getElementById("again-btn");
 const video = document.getElementById("camera-frame");
@@ -8,6 +8,7 @@ const readerCard = document.getElementById("reader-card");
 const currentFile = document.getElementById("current-file");
 const progressBar = document.getElementById("progress-bar");
 const progressLabel = document.getElementById("progress-label");
+const speedLabel = document.getElementById("speed-label");
 const result = document.getElementById("result");
 const previewContent = document.getElementById("preview-content");
 const banner = document.getElementById("banner");
@@ -23,6 +24,8 @@ let fileSize = 0;
 let mime = "application/octet-stream";
 let name = "received-file";
 let receivedUrls = [];
+let receivedBytes = 0;
+let receiveStartedAt = 0;
 
 const showBanner = (message, type = "error") => {
   banner.textContent = message;
@@ -41,6 +44,11 @@ function updateProgress() {
   const percent = totalChunks ? Math.floor((chunks.size / totalChunks) * 100) : 0;
   progressBar.style.width = `${percent}%`;
   progressLabel.textContent = `${percent}%（${chunks.size} / ${totalChunks || "?"} チャンク）`;
+  if (speedLabel) {
+    const elapsed = receiveStartedAt ? (performance.now() - receiveStartedAt) / 1000 : 0;
+    const speed = elapsed > 0 ? receivedBytes / 1024 / elapsed : 0;
+    speedLabel.textContent = speed > 0 ? `受信速度: ${speed.toFixed(1)} KB/s` : "受信速度: 計測中";
+  }
 }
 
 function resetTransfer() {
@@ -51,6 +59,8 @@ function resetTransfer() {
   chunks = new Map();
   totalChunks = 0;
   fileSize = 0;
+  receivedBytes = 0;
+  receiveStartedAt = 0;
   currentFile.textContent = "QRを待機中";
   updateProgress();
   previewContent.replaceChildren();
@@ -168,6 +178,8 @@ function processCode(code) {
   const expectedLength = index === totalChunks - 1 ? fileSize - MAX_CHUNK_SIZE * index : MAX_CHUNK_SIZE;
   if (chunk.length !== expectedLength) return;
   chunks.set(index, chunk);
+  receivedBytes += chunk.length;
+  if (!receiveStartedAt) receiveStartedAt = performance.now();
   updateProgress();
   if (chunks.size === totalChunks) completeFile();
 }
