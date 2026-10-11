@@ -1,7 +1,9 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-// Larger QR payloads and a shorter display interval reduce the number of frames.
-const CHUNK_SIZE = 1000;
-const FRAME_INTERVAL = 180;
+// Keep each QR readable while showing every data frame twice for camera capture.
+const CHUNK_SIZE = 900;
+const FRAME_INTERVAL = 334;
+const DATA_REPEATS = 2;
+const META_REPEATS = 3;
 
 const fileInput = document.getElementById("file-input");
 const dropZone = document.getElementById("drop-zone");
@@ -17,6 +19,7 @@ let selectedFiles = [];
 let timer = null;
 let frames = [];
 let currentFrame = 0;
+let currentRepeat = 0;
 let objectUrls = [];
 
 const showBanner = (message, type = "error") => {
@@ -167,10 +170,23 @@ dropZone.addEventListener("drop", (event) => addFiles([...event.dataTransfer.fil
 
 function renderFrame(index) {
   const qr = qrcode(0, "M");
-  qr.addData(frames[index], "Byte");
+  qr.addData(frames[index].payload, "Byte");
   qr.make();
   qrElement.innerHTML = qr.createImgTag(6, 0);
   qrStatus.textContent = `QR ${index + 1} / ${frames.length}`;
+}
+
+function scheduleNextFrame() {
+  if (!timer) return;
+  timer = window.setTimeout(() => {
+    currentRepeat += 1;
+    if (currentRepeat >= frames[currentFrame].repeats) {
+      currentRepeat = 0;
+      currentFrame = (currentFrame + 1) % frames.length;
+      renderFrame(currentFrame);
+    }
+    scheduleNextFrame();
+  }, FRAME_INTERVAL);
 }
 
 async function startTransfer() {
@@ -184,10 +200,16 @@ async function startTransfer() {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const total = Math.max(1, Math.ceil(bytes.length / CHUNK_SIZE));
       const session = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
-      frames.push(`OneCode1|meta|${batch}|${fileIndex}|${selectedFiles.length}|${session}|${total}|${file.size}|${textBase64(file.type || "application/octet-stream")}|${textBase64(file.name)}`);
+      frames.push({
+        payload: `OneCode1|meta|${batch}|${fileIndex}|${selectedFiles.length}|${session}|${total}|${file.size}|${textBase64(file.type || "application/octet-stream")}|${textBase64(file.name)}`,
+        repeats: META_REPEATS,
+      });
       for (let index = 0; index < total; index += 1) {
         const chunk = bytes.subarray(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE);
-        frames.push(`OneCode1|data|${batch}|${fileIndex}|${session}|${index}|${total}|${toBase64(chunk)}`);
+        frames.push({
+          payload: `OneCode1|data|${batch}|${fileIndex}|${session}|${index}|${total}|${toBase64(chunk)}`,
+          repeats: DATA_REPEATS,
+        });
       }
     }
     currentFrame = 0;
@@ -196,10 +218,9 @@ async function startTransfer() {
     panel.classList.remove("hidden");
     startButton.textContent = "転送中…";
     renderFrame(0);
-    timer = window.setInterval(() => {
-      currentFrame = (currentFrame + 1) % frames.length;
-      renderFrame(currentFrame);
-    }, FRAME_INTERVAL);
+    currentRepeat = 0;
+    timer = true;
+    scheduleNextFrame();
     showBanner(`${selectedFiles.length}個のファイルを転送しています。`, "ok");
   } catch (error) {
     showBanner(`ファイルの準備に失敗しました: ${error.message}`);
@@ -208,10 +229,11 @@ async function startTransfer() {
 }
 
 function stopTransfer() {
-  if (timer) clearInterval(timer);
+  if (timer) clearTimeout(timer);
   timer = null;
   frames = [];
   currentFrame = 0;
+  currentRepeat = 0;
   panel.classList.add("hidden");
   dropZone.classList.remove("hidden");
   fileCard.classList.toggle("hidden", selectedFiles.length === 0);
