@@ -16,11 +16,11 @@
     <div class="form-shell">
       <label class="drop-zone" id="drop-zone" for="file-input"><strong>ファイルを選択</strong><span>ここへドラッグ＆ドロップもできます</span><span class="hint">複数選択可 / 1ファイル最大50MB</span></label>
       <input id="file-input" type="file" multiple />
-      <div id="file-card" class="file-card hidden"><div id="file-list" class="file-list"></div><button class="primary" id="start-btn" type="button">QR転送を開始</button></div>
+      <div id="file-card" class="file-card hidden"><div id="file-list" class="file-list"></div><fieldset class="qr-size-options"><legend>QRコードのデータ量</legend><label><input type="radio" name="qr-size" value="small"> 小（読み取りやすい）</label><label><input type="radio" name="qr-size" value="large" checked> 大（高速）</label></fieldset><button class="primary" id="start-btn" type="button">QR転送を開始</button></div>
       <div id="transfer-panel" class="hidden">
         <div class="qr-wrap"><div id="qrcode" aria-label="転送用QRコード"></div><p class="qr-status frame-count" id="qr-status"></p></div>
         <button class="secondary" id="stop-btn" type="button">転送を停止</button>
-        <p class="hint">速度を上げるには、端末同士を近づける・画面の明るさを上げる・受信側の枠内にQRを固定する方法が有効です。より高速なWebRTC転送は将来の候補です。</p>
+        <p class="hint">読み取りにくい場合は、QRコードのデータ量を「小」にすると読み取りやすくなります（その分、転送時間は長くなります）。</p>
       </div>
       <p id="banner" class="banner hidden" role="status"></p>
     </div>
