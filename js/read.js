@@ -21,7 +21,6 @@ let currentFileIndex = -1;
 let session = null;
 let chunks = new Map();
 let totalChunks = 0;
-let chunkSize = MAX_CHUNK_SIZE;
 let fileSize = 0;
 let mime = "application/octet-stream";
 let name = "received-file";
@@ -62,7 +61,6 @@ function resetTransfer() {
   session = null;
   chunks = new Map();
   totalChunks = 0;
-  chunkSize = MAX_CHUNK_SIZE;
   fileSize = 0;
   receivedBytes = 0;
   receiveStartedAt = 0;
@@ -224,7 +222,7 @@ function completeFile() {
 function processCode(code) {
   const parts = code.split("|");
   if (parts[0] !== "OneCode1") return;
-  if (parts[1] === "meta" && (parts.length === 10 || parts.length === 11)) {
+  if (parts[1] === "meta" && parts.length === 10) {
     const [nextBatch, fileIndexText, countText, nextSession] = parts.slice(2, 6);
     const fileIndex = Number(fileIndexText);
     const declaredCount = Number(countText);
@@ -235,14 +233,12 @@ function processCode(code) {
     if (fileIndex !== currentFileIndex + 1) return;
     const declaredChunks = Number(parts[6]);
     const declaredSize = Number(parts[7]);
-    const declaredChunkSize = parts.length === 11 ? Number(parts[10]) : MAX_CHUNK_SIZE;
-    if (![150, 300, MAX_CHUNK_SIZE].includes(declaredChunkSize) || !Number.isSafeInteger(declaredChunks) || declaredChunks < 1 || !Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > MAX_FILE_SIZE || declaredChunks !== Math.max(1, Math.ceil(declaredSize / declaredChunkSize))) return;
+    if (!Number.isSafeInteger(declaredChunks) || declaredChunks < 1 || !Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > MAX_FILE_SIZE || declaredChunks !== Math.max(1, Math.ceil(declaredSize / MAX_CHUNK_SIZE))) return;
     batch = nextBatch;
     fileCount = declaredCount;
     currentFileIndex = fileIndex;
     session = nextSession;
     totalChunks = declaredChunks;
-    chunkSize = declaredChunkSize;
     fileSize = declaredSize;
     mime = fromTextBase64(parts[8]).slice(0, 128) || "application/octet-stream";
     name = fromTextBase64(parts[9]).slice(0, 255) || "received-file";
@@ -255,7 +251,7 @@ function processCode(code) {
   const index = Number(parts[5]);
   if (!Number.isInteger(index) || index < 0 || index >= totalChunks || chunks.has(index)) return;
   const chunk = fromBase64(parts[7]);
-  const expectedLength = index === totalChunks - 1 ? fileSize - chunkSize * index : chunkSize;
+  const expectedLength = index === totalChunks - 1 ? fileSize - MAX_CHUNK_SIZE * index : MAX_CHUNK_SIZE;
   if (chunk.length !== expectedLength) return;
   chunks.set(index, chunk);
   receivedBytes += chunk.length;

@@ -1,7 +1,6 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 // Keep payloads comfortably below the camera decoder limit, then repeat frames.
-const CHUNK_SIZE_LARGE = 600;
-const CHUNK_SIZE_SMALL = 150;
+const CHUNK_SIZE = 600;
 const FRAME_INTERVAL = 220;
 const DATA_REPEATS = 2;
 const META_REPEATS = 4;
@@ -10,7 +9,6 @@ const fileInput = document.getElementById("file-input");
 const dropZone = document.getElementById("drop-zone");
 const fileCard = document.getElementById("file-card");
 const fileList = document.getElementById("file-list");
-const qrSizeOptions = [...document.querySelectorAll('input[name="qr-size"]')];
 const startButton = document.getElementById("start-btn");
 const stopButton = document.getElementById("stop-btn");
 const panel = document.getElementById("transfer-panel");
@@ -23,10 +21,6 @@ let frames = [];
 let currentFrame = 0;
 let currentRepeat = 0;
 let objectUrls = [];
-
-const isMobile = window.matchMedia("(max-width: 640px)").matches;
-const defaultQrSize = isMobile ? "small" : "large";
-qrSizeOptions.find((option) => option.value === defaultQrSize).checked = true;
 
 const showBanner = (message, type = "error") => {
   banner.textContent = message;
@@ -204,22 +198,19 @@ async function startTransfer() {
   if (!selectedFiles.length) return;
   startButton.disabled = true;
   try {
-    const chunkSize = qrSizeOptions.find((option) => option.checked).value === "small"
-      ? CHUNK_SIZE_SMALL
-      : CHUNK_SIZE_LARGE;
     const batch = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
     frames = [];
     for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex += 1) {
       const file = selectedFiles[fileIndex];
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const total = Math.max(1, Math.ceil(bytes.length / chunkSize));
+      const total = Math.max(1, Math.ceil(bytes.length / CHUNK_SIZE));
       const session = crypto.randomUUID().replaceAll("-", "").slice(0, 16);
       frames.push({
-        payload: `OneCode1|meta|${batch}|${fileIndex}|${selectedFiles.length}|${session}|${total}|${file.size}|${textBase64(file.type || "application/octet-stream")}|${textBase64(file.name)}|${chunkSize}`,
+        payload: `OneCode1|meta|${batch}|${fileIndex}|${selectedFiles.length}|${session}|${total}|${file.size}|${textBase64(file.type || "application/octet-stream")}|${textBase64(file.name)}`,
         repeats: META_REPEATS,
       });
       for (let index = 0; index < total; index += 1) {
-        const chunk = bytes.subarray(index * chunkSize, (index + 1) * chunkSize);
+        const chunk = bytes.subarray(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE);
         frames.push({
           payload: `OneCode1|data|${batch}|${fileIndex}|${session}|${index}|${total}|${toBase64(chunk)}`,
           repeats: DATA_REPEATS,

@@ -71,10 +71,6 @@ input[type="file"] { display: none; }
 .file-item-meta { margin: .2rem 0 0; color: color-mix(in srgb, var(--ink) 58%, transparent); font-size: .78rem; }
 .file-item-actions { display: flex; gap: .35rem; }
 .file-item-actions button { padding: .45rem .55rem; font-size: .78rem; }
-.qr-size-options { display: flex; flex-wrap: wrap; gap: .55rem 1rem; margin: 1rem 0; padding: .75rem; border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); border-radius: .75rem; }
-.qr-size-options legend { padding: 0 .35rem; color: var(--moss); font-size: .85rem; font-weight: 600; }
-.qr-size-options label { display: inline-flex; align-items: center; gap: .35rem; font-size: .9rem; }
-.qr-size-options input { accent-color: var(--leaf); }
 .file-name { font-weight: 600; word-break: break-all; }
 .qr-wrap { display: grid; place-items: center; gap: .5rem; padding: .7rem; border-radius: 1rem; background: white; }
 #qrcode { width: min(320px, calc(100vw - 3rem)); aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; }
