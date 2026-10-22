@@ -1,5 +1,5 @@
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
-const MAX_CHUNK_SIZE = 720;
+const MAX_CHUNK_SIZE = 600;
 const scanButton = document.getElementById("scan-btn");
 const againButton = document.getElementById("again-btn");
 const video = document.getElementById("camera-frame");
@@ -8,8 +8,10 @@ const readerCard = document.getElementById("reader-card");
 const currentFile = document.getElementById("current-file");
 const progressBar = document.getElementById("progress-bar");
 const progressLabel = document.getElementById("progress-label");
+const speedLabel = document.getElementById("speed-label");
 const result = document.getElementById("result");
 const previewContent = document.getElementById("preview-content");
+const zipDownloadButton = document.getElementById("zip-download-btn");
 const banner = document.getElementById("banner");
 let stream = null;
 let animationFrame = null;
@@ -19,10 +21,15 @@ let currentFileIndex = -1;
 let session = null;
 let chunks = new Map();
 let totalChunks = 0;
+let chunkSize = MAX_CHUNK_SIZE;
 let fileSize = 0;
 let mime = "application/octet-stream";
 let name = "received-file";
 let receivedUrls = [];
+let receivedBytes = 0;
+let receiveStartedAt = 0;
+let lastScanAt = 0;
+const receivedFiles = [];
 
 const showBanner = (message, type = "error") => {
   banner.textContent = message;
@@ -41,6 +48,11 @@ function updateProgress() {
   const percent = totalChunks ? Math.floor((chunks.size / totalChunks) * 100) : 0;
   progressBar.style.width = `${percent}%`;
   progressLabel.textContent = `${percent}%（${chunks.size} / ${totalChunks || "?"} チャンク）`;
+  if (speedLabel) {
+    const elapsed = receiveStartedAt ? (performance.now() - receiveStartedAt) / 1000 : 0;
+    const speed = elapsed > 0 ? receivedBytes / 1024 / elapsed : 0;
+    speedLabel.textContent = speed > 0 ? `受信速度: ${speed.toFixed(1)} KB/s` : "受信速度: 計測中";
+  }
 }
 
 function resetTransfer() {
@@ -50,12 +62,17 @@ function resetTransfer() {
   session = null;
   chunks = new Map();
   totalChunks = 0;
+  chunkSize = MAX_CHUNK_SIZE;
   fileSize = 0;
+  receivedBytes = 0;
+  receiveStartedAt = 0;
   currentFile.textContent = "QRを待機中";
   updateProgress();
   previewContent.replaceChildren();
   receivedUrls.forEach((url) => URL.revokeObjectURL(url));
   receivedUrls = [];
+  receivedFiles.length = 0;
+  zipDownloadButton.classList.add("hidden");
   result.classList.add("hidden");
   banner.classList.add("hidden");
 }
@@ -69,18 +86,53 @@ function stopCamera() {
   scanButton.classList.remove("hidden");
 }
 
+function splitFileName(fileName) {
+  const dot = fileName.lastIndexOf(".");
+  return dot > 0
+    ? { base: fileName.slice(0, dot), extension: fileName.slice(dot + 1).toLowerCase() }
+    : { base: fileName, extension: "" };
+}
+
+function safeFileName(value, fallback) {
+  const cleaned = value.trim().replace(/[\\/:*?"<>|]/g, "_");
+  return cleaned || fallback;
+}
+
 function appendPreview(blob) {
   const url = URL.createObjectURL(blob);
   receivedUrls.push(url);
+  const file = { blob, name, mime, size: fileSize, url };
+  receivedFiles.push(file);
   const item = document.createElement("article");
   item.className = "received-item";
-  const title = document.createElement("strong");
-  title.textContent = `${name}（${Math.round(fileSize / 1024)} KB）`;
-  item.append(title);
+  const nameEditor = document.createElement("label");
+  nameEditor.className = "file-name-editor";
+  const parts = splitFileName(name);
+  let downloadLink = null;
+  const input = document.createElement("input");
+  input.className = "file-item-name";
+  input.type = "text";
+  input.value = parts.base;
+  input.setAttribute("aria-label", `${name}の拡張子を除いた保存名`);
+  const extension = document.createElement("span");
+  extension.className = "file-name-extension";
+  extension.textContent = parts.extension ? `.${parts.extension}` : "";
+  const updateName = () => {
+    file.name = `${safeFileName(input.value, parts.base)}${parts.extension ? `.${parts.extension}` : ""}`;
+    input.value = splitFileName(file.name).base;
+    if (downloadLink) downloadLink.download = file.name;
+  };
+  input.addEventListener("change", updateName);
+  input.addEventListener("blur", updateName);
+  nameEditor.append(input, extension);
+  const meta = document.createElement("p");
+  meta.className = "file-item-meta";
+  meta.textContent = `${Math.round(fileSize / 1024)} KB`;
+  item.append(nameEditor, meta);
   if (mime.startsWith("image/")) {
     const image = document.createElement("img");
     image.src = url;
-    image.alt = name;
+    image.alt = file.name;
     item.append(image);
   } else if (mime.startsWith("video/")) {
     const player = document.createElement("video");
@@ -96,7 +148,7 @@ function appendPreview(blob) {
   } else if (mime === "application/pdf") {
     const frame = document.createElement("iframe");
     frame.src = url;
-    frame.title = name;
+    frame.title = file.name;
     frame.height = 320;
     item.append(frame);
   } else {
@@ -104,14 +156,50 @@ function appendPreview(blob) {
     note.textContent = "プレビュー非対応の形式です。ダウンロードして確認してください。";
     item.append(note);
   }
-  const link = document.createElement("a");
-  link.className = "secondary-link";
-  link.href = url;
-  link.download = name;
-  link.textContent = "ファイルをダウンロード";
-  item.append(link);
+  downloadLink = document.createElement("a");
+  downloadLink.className = "secondary-link";
+  downloadLink.href = url;
+  downloadLink.download = file.name;
+  downloadLink.textContent = "ファイルをダウンロード";
+  item.append(downloadLink);
   previewContent.append(item);
   result.classList.remove("hidden");
+  zipDownloadButton.classList.toggle("hidden", receivedFiles.length < 1);
+}
+
+async function downloadZip() {
+  if (!window.JSZip || !receivedFiles.length) {
+    showBanner("ZIP機能の読み込みが完了していません。オンラインで一度開いてから再試行してください。");
+    return;
+  }
+  zipDownloadButton.disabled = true;
+  try {
+    const zip = new JSZip();
+    const usedNames = new Set();
+    receivedFiles.forEach((file) => {
+      const original = file.name;
+      const parts = splitFileName(original);
+      let candidate = original;
+      let number = 2;
+      while (usedNames.has(candidate)) {
+        candidate = `${parts.base} (${number})${parts.extension ? `.${parts.extension}` : ""}`;
+        number += 1;
+      }
+      usedNames.add(candidate);
+      zip.file(candidate, file.blob);
+    });
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "onecode-received-files.zip";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    showBanner(`ZIPの作成に失敗しました: ${error.message}`);
+  } finally {
+    zipDownloadButton.disabled = false;
+  }
 }
 
 function completeFile() {
@@ -136,7 +224,7 @@ function completeFile() {
 function processCode(code) {
   const parts = code.split("|");
   if (parts[0] !== "OneCode1") return;
-  if (parts[1] === "meta" && parts.length === 10) {
+  if (parts[1] === "meta" && (parts.length === 10 || parts.length === 11)) {
     const [nextBatch, fileIndexText, countText, nextSession] = parts.slice(2, 6);
     const fileIndex = Number(fileIndexText);
     const declaredCount = Number(countText);
@@ -147,12 +235,14 @@ function processCode(code) {
     if (fileIndex !== currentFileIndex + 1) return;
     const declaredChunks = Number(parts[6]);
     const declaredSize = Number(parts[7]);
-    if (!Number.isSafeInteger(declaredChunks) || declaredChunks < 1 || !Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > MAX_FILE_SIZE || declaredChunks !== Math.max(1, Math.ceil(declaredSize / MAX_CHUNK_SIZE))) return;
+    const declaredChunkSize = parts.length === 11 ? Number(parts[10]) : MAX_CHUNK_SIZE;
+    if (![150, 300, MAX_CHUNK_SIZE].includes(declaredChunkSize) || !Number.isSafeInteger(declaredChunks) || declaredChunks < 1 || !Number.isSafeInteger(declaredSize) || declaredSize < 0 || declaredSize > MAX_FILE_SIZE || declaredChunks !== Math.max(1, Math.ceil(declaredSize / declaredChunkSize))) return;
     batch = nextBatch;
     fileCount = declaredCount;
     currentFileIndex = fileIndex;
     session = nextSession;
     totalChunks = declaredChunks;
+    chunkSize = declaredChunkSize;
     fileSize = declaredSize;
     mime = fromTextBase64(parts[8]).slice(0, 128) || "application/octet-stream";
     name = fromTextBase64(parts[9]).slice(0, 255) || "received-file";
@@ -165,18 +255,23 @@ function processCode(code) {
   const index = Number(parts[5]);
   if (!Number.isInteger(index) || index < 0 || index >= totalChunks || chunks.has(index)) return;
   const chunk = fromBase64(parts[7]);
-  const expectedLength = index === totalChunks - 1 ? fileSize - MAX_CHUNK_SIZE * index : MAX_CHUNK_SIZE;
+  const expectedLength = index === totalChunks - 1 ? fileSize - chunkSize * index : chunkSize;
   if (chunk.length !== expectedLength) return;
   chunks.set(index, chunk);
+  receivedBytes += chunk.length;
+  if (!receiveStartedAt) receiveStartedAt = performance.now();
   updateProgress();
   if (chunks.size === totalChunks) completeFile();
 }
 
 function scanLoop() {
   if (!stream) return;
-  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+  const now = performance.now();
+  if (now - lastScanAt >= 80 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    lastScanAt = now;
+    const scale = Math.min(1, 1024 / video.videoWidth);
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     const context = canvas.getContext("2d", { willReadFrequently: true });
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const image = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -205,5 +300,6 @@ async function startCamera() {
 
 scanButton.addEventListener("click", startCamera);
 againButton.addEventListener("click", startCamera);
+zipDownloadButton.addEventListener("click", downloadZip);
 window.addEventListener("pagehide", stopCamera);
 resetTransfer();

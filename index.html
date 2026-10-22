@@ -3,8 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OneCode — QRでファイルを送る</title>
+    <title>OneCode — QRでファイル転送</title>
     <meta name="description" content="サーバーにファイルを預けず、QRコードで直接ファイルを送受信します。" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#f4d878" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,7 +15,7 @@
   </head>
   <body>
     <div class="page">
-      <div class="page"><header class="site-header"><a class="header-brand" href="/">OneCode</a><nav class="header-nav" aria-label="メインメニュー"><a class="back-link" href="/">トップへ</a><a href="/client.html">送る</a><a href="/read.html">受け取る</a></nav></header><main class="hero reader-shell"></main>
+      <header class="site-header"><a class="header-brand" href="/">OneCode</a><nav class="header-nav" aria-label="メインメニュー"><a href="/client.html">送る</a><a href="/read.html">受け取る</a></nav></header>
       <main class="hero">
         <p class="brand">OneCode</p>
         <h1 class="headline">ファイルを、QRで一息に渡す。</h1>
@@ -24,11 +26,11 @@
           <div class="feature-grid">
             <div><strong>直接転送</strong><span>ファイルの中身はサーバーに保存されません</span></div>
             <div><strong>画像・動画をプレビュー</strong><span>受信完了後、その場で内容を確認できます</span></div>
-            <div><strong>ファイル名の変更</strong><span>受信したファイルの名前を自由に変更できます</span></div>
+            <div><strong>ファイル名の変更</strong><span>送信するファイルの名前を自由に変更できます</span></div>
           </div>
         </div>
       </main>
-      <footer class="site-footer"><p>OneCode - QRファイル転送</p></footer>
+      <footer class="site-footer"><p>OneCode - QRファイル転送</p></footer><script src="/js/pwa.js" defer></script>
     </div>
   </body>
 </html>

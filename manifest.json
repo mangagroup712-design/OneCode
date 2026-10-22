@@ -1,0 +1,16 @@
+{
+  "name": "OneCode QRファイル転送",
+  "short_name": "OneCode",
+  "description": "インターネットを使わずQRコードでファイルを送受信するPWA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffdf2",
+  "theme_color": "#f4d878",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "32x32",
+      "type": "image/x-icon"
+    }
+  ]
+}
